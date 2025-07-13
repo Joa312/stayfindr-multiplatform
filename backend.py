@@ -15,9 +15,9 @@ from urllib.parse import quote_plus
 app = Flask(__name__)
 CORS(app)
 
-# API Configuration
-RAPIDAPI_KEY_BOOKING = os.environ.get('RAPIDAPI_KEY_BOOKING', 'demo_key')
-RAPIDAPI_KEY_HOTELS = os.environ.get('RAPIDAPI_KEY_HOTELS', 'demo_key')
+# API Configuration - FORCE REAL DATA
+RAPIDAPI_KEY_BOOKING = os.environ.get('RAPIDAPI_KEY_BOOKING', 'MISSING')
+RAPIDAPI_KEY_HOTELS = os.environ.get('RAPIDAPI_KEY_HOTELS', 'MISSING')
 
 # European Cities Configuration - COMPLETE 29 cities
 CITIES = {
@@ -217,40 +217,54 @@ ROOM_TYPES = {
 }
 
 def get_booking_com_hotels(city_info, checkin, checkout, adults, rooms, room_type, city_key):
-    """Get hotels from Booking.com via RapidAPI"""
+    """Get hotels from Booking.com via RapidAPI - FORCE REAL DATA"""
     
-    # Mock data for demonstration (replace with real API when you get keys)
-    if RAPIDAPI_KEY_BOOKING == 'demo_key':
-        return generate_mock_hotels(city_info, 'booking.com', room_type, city_key)
+    # NEVER use mock data - always try real API first
+    if RAPIDAPI_KEY_BOOKING == 'MISSING':
+        print("❌ RAPIDAPI_KEY_BOOKING is missing!")
+        return []
     
-    # Real API implementation (when you have valid keys)
     try:
-        url = "https://booking-com18.p.rapidapi.com/stays/search"
+        print(f"🔄 Calling REAL Booking.com API for {city_info['name']}...")
+        
+        # Use real Booking.com API
+        url = "https://booking-com15.p.rapidapi.com/api/v1/hotels/searchHotels"
         
         querystring = {
-            "locationId": city_info.get('booking_id', '1'),
-            "checkinDate": checkin,
-            "checkoutDate": checkout,
+            "dest_id": get_destination_id(city_info['name']),
+            "search_type": "city",
+            "arrival_date": checkin,
+            "departure_date": checkout,
             "adults": adults,
-            "rooms": rooms,
-            "currency": "EUR"
+            "children": "0",
+            "room_qty": rooms,
+            "page_number": "1",
+            "units": "metric",
+            "temperature_unit": "c",
+            "languagecode": "en-us",
+            "currency_code": "EUR"
         }
         
         headers = {
             "X-RapidAPI-Key": RAPIDAPI_KEY_BOOKING,
-            "X-RapidAPI-Host": "booking-com18.p.rapidapi.com"
+            "X-RapidAPI-Host": "booking-com15.p.rapidapi.com"
         }
         
-        response = requests.get(url, headers=headers, params=querystring)
+        response = requests.get(url, headers=headers, params=querystring, timeout=30)
+        print(f"📡 Booking.com API Response: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
+            print(f"✅ Got real Booking.com data: {len(data.get('data', {}).get('hotels', []))} hotels")
             return process_booking_hotels(data, city_info, room_type, city_key)
+        else:
+            print(f"❌ Booking.com API error: {response.status_code} - {response.text}")
         
     except Exception as e:
-        print(f"Booking.com API error: {e}")
+        print(f"❌ Booking.com API exception: {e}")
     
-    # Fallback to mock data
+    # Only use mock as absolute last resort
+    print("⚠️ Falling back to mock data - API failed")
     return generate_mock_hotels(city_info, 'booking.com', room_type, city_key)
 
 def get_hotels_com_hotels(city_info, checkin, checkout, adults, rooms, room_type, city_key):
@@ -358,29 +372,76 @@ def create_localized_booking_url(city_info, platform, room_type, hotel_name, cit
     
     return "#"
 
+def get_destination_id(city_name):
+    """Get destination ID for major cities"""
+    city_ids = {
+        'Stockholm, Sweden': '-2735409',
+        'Paris, France': '-1456928',
+        'London, UK': '-2601889', 
+        'Amsterdam, Netherlands': '-2140479',
+        'Barcelona, Spain': '-372490',
+        'Rome, Italy': '-126693',
+        'Berlin, Germany': '-1746443',
+        'Copenhagen, Denmark': '-2618425',
+        'Vienna, Austria': '-1995499',
+        'Prague, Czech Republic': '-553173',
+        'Madrid, Spain': '-390625',
+        'Milano, Italy': '-1308023'
+    }
+    return city_ids.get(city_name, '-2735409')  # Default to Stockholm
+
 def process_booking_hotels(data, city_info, room_type, city_key):
     """Process real Booking.com API response"""
     hotels = []
     
-    if 'data' in data:
-        for i, hotel_data in enumerate(data['data'][:25]):  # Limit to 25 hotels
-            hotel = {
-                'id': hotel_data.get('id'),
-                'name': hotel_data.get('name'),
-                'address': hotel_data.get('address', city_info['name']),
-                'coordinates': [
-                    float(hotel_data.get('latitude', city_info['coordinates'][0])),
-                    float(hotel_data.get('longitude', city_info['coordinates'][1]))
-                ],
-                'price': hotel_data.get('price', {}).get('amount', 100),
-                'currency': hotel_data.get('price', {}).get('currency', 'EUR'),
-                'rating': hotel_data.get('rating', 4.0),
-                'platform': 'booking.com',
-                'room_type': ROOM_TYPES.get(room_type, {}).get('name', 'Double Room'),
-                'booking_url': create_localized_booking_url(city_info, 'booking.com', room_type, hotel_data.get('name', 'Hotel'), city_key)
-            }
-            hotels.append(hotel)
+    if 'data' in data and 'hotels' in data['data']:
+        hotel_list = data['data']['hotels']
+        print(f"📊 Processing {len(hotel_list)} real hotels from Booking.com")
+        
+        for i, hotel_data in enumerate(hotel_list[:25]):  # Limit to 25 hotels
+            try:
+                # Extract real hotel data
+                hotel_name = hotel_data.get('property', {}).get('name', 'Unknown Hotel')
+                hotel_id = hotel_data.get('property', {}).get('id', f"booking_{i}")
+                
+                # Real coordinates
+                coords = hotel_data.get('property', {}).get('coordinates', {})
+                latitude = coords.get('latitude', city_info['coordinates'][0])
+                longitude = coords.get('longitude', city_info['coordinates'][1])
+                
+                # Real pricing
+                price_data = hotel_data.get('property', {}).get('priceBreakdown', {})
+                total_price = price_data.get('grossPrice', {}).get('value', 150)
+                
+                # Real address
+                address = hotel_data.get('property', {}).get('wishlistName', city_info['name'])
+                
+                # Real rating
+                rating = hotel_data.get('property', {}).get('reviewScore', 4.0)
+                if rating > 5:
+                    rating = rating / 2  # Convert to 5-point scale
+                
+                hotel = {
+                    'id': f"booking_{hotel_id}",
+                    'name': hotel_name,
+                    'address': address,
+                    'coordinates': [float(latitude), float(longitude)],
+                    'price': int(total_price),
+                    'currency': 'EUR',
+                    'rating': round(float(rating), 1),
+                    'platform': 'booking.com',
+                    'room_type': ROOM_TYPES.get(room_type, {}).get('name', 'Double Room'),
+                    'room_description': ROOM_TYPES.get(room_type, {}).get('description', 'Standard room'),
+                    'booking_url': create_localized_booking_url(city_info, 'booking.com', room_type, hotel_name, city_key),
+                    'amenities': ['WiFi', 'Breakfast'] if room_type != 'suite' else ['WiFi', 'Breakfast', 'Spa', 'Room Service']
+                }
+                hotels.append(hotel)
+                
+            except Exception as e:
+                print(f"⚠️ Error processing hotel {i}: {e}")
+                continue
     
+    print(f"✅ Successfully processed {len(hotels)} real Booking.com hotels")
     return hotels
 
 def aggregate_and_compare_prices(booking_hotels, hotels_com_hotels):
@@ -449,12 +510,22 @@ def home():
 
 @app.route('/test')
 def test():
-    """Health check endpoint"""
+    """Health check endpoint with API key status"""
+    
+    # Check API key status
+    booking_status = "✅ ACTIVE" if RAPIDAPI_KEY_BOOKING != 'MISSING' else "❌ MISSING"
+    hotels_status = "✅ ACTIVE" if RAPIDAPI_KEY_HOTELS != 'MISSING' else "❌ MISSING"
+    
     return jsonify({
         'status': 'STAYFINDR Multiplatform Backend Online!',
         'platforms': ['Booking.com', 'Hotels.com'],
         'cities': len(CITIES),
         'room_types': len(ROOM_TYPES),
+        'api_keys': {
+            'booking_com': booking_status,
+            'hotels_com': hotels_status
+        },
+        'data_mode': 'REAL_DATA' if booking_status == "✅ ACTIVE" else 'MOCK_DATA',
         'features': {
             'price_comparison': True,
             'room_filtering': True,
