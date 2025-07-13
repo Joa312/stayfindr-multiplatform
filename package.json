@@ -1,97 +1,19 @@
 {
   "name": "stayfindr-multiplatform",
   "version": "1.0.0",
-  "description": "STAYFINDR Multi-Platform Hotel Search - Aggregating Booking.com, Expedia, Hotels.com across Europe",
-  "main": "backend/src/app.js",
+  "description": "STAYFINDR Multi-Platform Hotel Search",
   "scripts": {
-    "setup": "npm install && npm run setup:frontend && npm run setup:backend",
-    "setup:frontend": "cd frontend && npm install",
-    "setup:backend": "cd backend && npm install",
-    
+    "setup": "npm install && cd frontend && npm install && cd ../backend && npm install && cd ..",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && npm run dev",
-    
-    "build": "npm run build:frontend && npm run build:backend",
-    "build:frontend": "cd frontend && npm run build",
-    "build:backend": "cd backend && npm run build",
-    
-    "start": "cd backend && npm start",
-    "start:prod": "NODE_ENV=production npm start",
-    
-    "test": "npm run test:backend && npm run test:frontend",
-    "test:backend": "cd backend && npm test",
-    "test:frontend": "cd frontend && npm test",
-    "test:coverage": "npm run test:backend -- --coverage && npm run test:frontend -- --coverage",
-    
-    "lint": "npm run lint:backend && npm run lint:frontend",
-    "lint:backend": "cd backend && npm run lint",
-    "lint:frontend": "cd frontend && npm run lint",
-    "lint:fix": "npm run lint:backend -- --fix && npm run lint:frontend -- --fix",
-    
-    "docker:build": "docker-compose build",
-    "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f",
-    
-    "deploy:staging": "npm run build && ./scripts/deploy.sh staging",
-    "deploy:production": "npm run build && ./scripts/deploy.sh production",
-    
-    "clean": "npm run clean:frontend && npm run clean:backend",
-    "clean:frontend": "cd frontend && rm -rf dist node_modules",
-    "clean:backend": "cd backend && rm -rf dist node_modules",
-    
-    "postinstall": "husky install"
-  },
-  "keywords": [
-    "hotel",
-    "booking",
-    "travel",
-    "aggregator",
-    "multi-platform",
-    "booking.com",
-    "expedia",
-    "hotels.com",
-    "europe",
-    "price-comparison"
-  ],
-  "author": "Joakim <joa312@example.com>",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Joa312/stayfindr-multiplatform.git"
-  },
-  "bugs": {
-    "url": "https://github.com/Joa312/stayfindr-multiplatform/issues"
-  },
-  "homepage": "https://stayfindr.com",
-  "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=8.0.0"
+    "build": "cd frontend && npm run build"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
-    "husky": "^8.0.3",
-    "lint-staged": "^15.2.0",
-    "prettier": "^3.1.1"
+    "concurrently": "^8.2.2"
   },
-  "workspaces": [
-    "frontend",
-    "backend"
-  ],
-  "lint-staged": {
-    "*.{js,jsx,ts,tsx}": [
-      "prettier --write",
-      "eslint --fix"
-    ],
-    "*.{json,css,md}": [
-      "prettier --write"
-    ]
-  },
-  "husky": {
-    "hooks": {
-      "pre-commit": "lint-staged",
-      "pre-push": "npm test"
-    }
+  "dependencies": {
+    "axios": "^1.10.0",
+    "dotenv": "^17.2.0"
   }
 }
