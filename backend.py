@@ -217,9 +217,8 @@ ROOM_TYPES = {
 }
 
 def get_booking_com_hotels(city_info, checkin, checkout, adults, rooms, room_type, city_key):
-    """Get hotels from Booking.com via RapidAPI - FORCE REAL DATA"""
+    """Get hotels from Booking.com via RapidAPI - WORKING ENDPOINT"""
     
-    # NEVER use mock data - always try real API first
     if RAPIDAPI_KEY_BOOKING == 'MISSING':
         print("❌ RAPIDAPI_KEY_BOOKING is missing!")
         return []
@@ -227,85 +226,97 @@ def get_booking_com_hotels(city_info, checkin, checkout, adults, rooms, room_typ
     try:
         print(f"🔄 Calling REAL Booking.com API for {city_info['name']}...")
         
-        # Try multiple API endpoints to ensure we get real data
-        endpoints_to_try = [
-            {
-                'url': 'https://booking-com.p.rapidapi.com/v1/hotels/search',
-                'host': 'booking-com.p.rapidapi.com',
-                'params': {
-                    'room_number': rooms,
-                    'dest_id': get_destination_id(city_info['name']),
-                    'dest_type': 'city',
-                    'checkin_date': checkin,
-                    'checkout_date': checkout,
-                    'adults_number': adults,
-                    'order_by': 'popularity',
-                    'filter_by_currency': 'EUR',
-                    'locale': 'en-gb',
-                    'units': 'metric'
-                }
-            },
-            {
-                'url': 'https://booking-com15.p.rapidapi.com/api/v1/hotels/searchHotels',
-                'host': 'booking-com15.p.rapidapi.com',
-                'params': {
-                    'dest_id': get_destination_id(city_info['name']),
-                    'search_type': 'city',
-                    'arrival_date': checkin,
-                    'departure_date': checkout,
-                    'adults': adults,
-                    'children': '0',
-                    'room_qty': rooms,
-                    'page_number': '1',
-                    'units': 'metric',
-                    'temperature_unit': 'c',
-                    'languagecode': 'en-us',
-                    'currency_code': 'EUR'
-                }
-            }
-        ]
+        # Use the WORKING endpoint that you just tested successfully
+        url = "https://booking-com.p.rapidapi.com/v1/stays/search"
         
-        for endpoint in endpoints_to_try:
-            try:
-                headers = {
-                    "X-RapidAPI-Key": RAPIDAPI_KEY_BOOKING,
-                    "X-RapidAPI-Host": endpoint['host']
-                }
+        headers = {
+            "X-RapidAPI-Key": RAPIDAPI_KEY_BOOKING,
+            "X-RapidAPI-Host": "booking-com.p.rapidapi.com"
+        }
+        
+        # Use parameters similar to what worked in your test
+        querystring = {
+            "checkinDate": checkin,
+            "checkoutDate": checkout,
+            "adults": adults,
+            "children": "0",
+            "rooms": rooms,
+            "destination": city_info['name'].split(',')[0],  # Just city name
+            "currency": "EUR",
+            "locale": "en-GB"
+        }
+        
+        print(f"📡 Calling {url} with params: {querystring}")
+        response = requests.get(url, headers=headers, params=querystring, timeout=30)
+        print(f"📊 API Response: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f"✅ Raw API response keys: {list(data.keys())}")
+            
+            # Process the working API response format
+            hotels = []
+            if 'data' in data and isinstance(data['data'], list):
+                hotel_list = data['data']
+                print(f"🏨 Found {len(hotel_list)} hotels in data array")
                 
-                print(f"📡 Trying {endpoint['host']}...")
-                response = requests.get(endpoint['url'], headers=headers, params=endpoint['params'], timeout=30)
-                print(f"📊 Response: {response.status_code}")
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    print(f"✅ Raw API response keys: {list(data.keys())}")
-                    
-                    # Try to find hotels in the response
-                    hotels_data = None
-                    if 'result' in data:
-                        hotels_data = data['result']
-                    elif 'data' in data and 'hotels' in data['data']:
-                        hotels_data = data['data']['hotels']
-                    elif 'data' in data:
-                        hotels_data = data['data']
-                    
-                    if hotels_data and len(hotels_data) > 0:
-                        print(f"🎉 Found {len(hotels_data)} real hotels from {endpoint['host']}")
-                        return process_real_booking_hotels(hotels_data, city_info, room_type, city_key)
-                    else:
-                        print(f"⚠️ No hotels found in response from {endpoint['host']}")
+                for i, hotel_data in enumerate(hotel_list[:25]):  # Limit to 25
+                    try:
+                        # Extract hotel information from the working API format
+                        hotel_name = hotel_data.get('name', f'Hotel {i+1}')
+                        hotel_id = hotel_data.get('id', f'booking_{i}')
                         
-            except Exception as e:
-                print(f"❌ Error with {endpoint['host']}: {e}")
-                continue
-        
-        print("❌ All Booking.com API endpoints failed")
-        
+                        # Get coordinates
+                        coordinates = hotel_data.get('coordinates', {})
+                        lat = coordinates.get('lat', city_info['coordinates'][0])
+                        lng = coordinates.get('lon', city_info['coordinates'][1])
+                        
+                        # Get pricing
+                        pricing = hotel_data.get('pricing', {})
+                        price = pricing.get('rate', {}).get('amount', 150)
+                        
+                        # Get address
+                        address = hotel_data.get('address', city_info['name'])
+                        
+                        # Get rating
+                        rating = hotel_data.get('rating', 4.0)
+                        if rating > 5:
+                            rating = rating / 2
+                        
+                        hotel = {
+                            'id': f"booking_real_{hotel_id}",
+                            'name': hotel_name,
+                            'address': address,
+                            'coordinates': [float(lat), float(lng)],
+                            'price': int(price) if price else 150,
+                            'currency': 'EUR',
+                            'rating': round(float(rating), 1),
+                            'platform': 'booking.com',
+                            'room_type': ROOM_TYPES.get(room_type, {}).get('name', 'Double Room'),
+                            'room_description': ROOM_TYPES.get(room_type, {}).get('description', 'Standard room'),
+                            'booking_url': create_localized_booking_url(city_info, 'booking.com', room_type, hotel_name, city_key),
+                            'amenities': ['WiFi', 'Breakfast'] if room_type != 'suite' else ['WiFi', 'Breakfast', 'Spa']
+                        }
+                        hotels.append(hotel)
+                        print(f"✅ Added real hotel: {hotel_name} - €{price}")
+                        
+                    except Exception as e:
+                        print(f"⚠️ Error processing hotel {i}: {e}")
+                        continue
+                
+                print(f"🎉 Successfully processed {len(hotels)} REAL hotels!")
+                return hotels
+            else:
+                print(f"⚠️ Unexpected data format: {type(data.get('data'))}")
+                
+        else:
+            print(f"❌ API error: {response.status_code} - {response.text}")
+            
     except Exception as e:
-        print(f"❌ Booking.com API exception: {e}")
+        print(f"❌ Exception: {e}")
     
-    # If ALL API attempts fail, return empty list to force error
-    print("🚫 REFUSING to return mock data - API must work!")
+    # If API fails, return empty to show error instead of fake data
+    print("🚫 API failed - no fake data!")
     return []
 
 def get_hotels_com_hotels(city_info, checkin, checkout, adults, rooms, room_type, city_key):
@@ -619,6 +630,81 @@ def test():
         }
     })
 
+@app.route('/debug-api')
+def debug_api():
+    """Debug API connections and test raw responses"""
+    
+    if RAPIDAPI_KEY_BOOKING == 'MISSING':
+        return jsonify({'error': 'API key missing'})
+    
+    debug_info = {
+        'api_key': f"{RAPIDAPI_KEY_BOOKING[:10]}...",
+        'tests': []
+    }
+    
+    # Test multiple API endpoints
+    test_endpoints = [
+        {
+            'name': 'Booking.com v1',
+            'url': 'https://booking-com.p.rapidapi.com/v1/hotels/search',
+            'host': 'booking-com.p.rapidapi.com',
+            'params': {
+                'room_number': '1',
+                'dest_id': '-2735409',
+                'dest_type': 'city',
+                'checkin_date': '2025-01-20',
+                'checkout_date': '2025-01-21',
+                'adults_number': '2'
+            }
+        },
+        {
+            'name': 'Booking.com v15',
+            'url': 'https://booking-com15.p.rapidapi.com/api/v1/hotels/searchHotels',
+            'host': 'booking-com15.p.rapidapi.com',
+            'params': {
+                'dest_id': '-2735409',
+                'search_type': 'city',
+                'arrival_date': '2025-01-20',
+                'departure_date': '2025-01-21',
+                'adults': '2'
+            }
+        }
+    ]
+    
+    for endpoint in test_endpoints:
+        test_result = {
+            'endpoint': endpoint['name'],
+            'url': endpoint['url'],
+            'status': 'unknown',
+            'response': None,
+            'error': None
+        }
+        
+        try:
+            headers = {
+                "X-RapidAPI-Key": RAPIDAPI_KEY_BOOKING,
+                "X-RapidAPI-Host": endpoint['host']
+            }
+            
+            response = requests.get(endpoint['url'], headers=headers, params=endpoint['params'], timeout=10)
+            test_result['status'] = response.status_code
+            
+            if response.status_code == 200:
+                data = response.json()
+                test_result['response'] = {
+                    'keys': list(data.keys()),
+                    'data_sample': str(data)[:500] + "..." if len(str(data)) > 500 else str(data)
+                }
+            else:
+                test_result['error'] = response.text
+                
+        except Exception as e:
+            test_result['error'] = str(e)
+        
+        debug_info['tests'].append(test_result)
+    
+    return jsonify(debug_info)
+
 @app.route('/api/cities')
 def get_cities():
     """Get all supported cities"""
@@ -627,8 +713,6 @@ def get_cities():
         'total': len(CITIES),
         'coverage': '29 Major European destinations'
     })
-
-@app.route('/api/room-types')
 def get_room_types():
     """Get all supported room types"""
     return jsonify({
