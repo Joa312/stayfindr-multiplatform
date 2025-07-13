@@ -1,6 +1,7 @@
 # STAYFINDR MULTIPLATFORM BACKEND - European Hotel Search Engine
 # Flask backend with multiple booking platform integration
 # Supports: Booking.com + Hotels.com + Room Type Filters
+# COMPLETE: 29 European cities with full feature parity
 
 import os
 from flask import Flask, request, jsonify
@@ -18,7 +19,7 @@ CORS(app)
 RAPIDAPI_KEY_BOOKING = os.environ.get('RAPIDAPI_KEY_BOOKING', 'demo_key')
 RAPIDAPI_KEY_HOTELS = os.environ.get('RAPIDAPI_KEY_HOTELS', 'demo_key')
 
-# European Cities Configuration - Top 10 destinations
+# European Cities Configuration - COMPLETE 29 cities
 CITIES = {
     'stockholm': {
         'name': 'Stockholm, Sweden',
@@ -55,6 +56,11 @@ CITIES = {
         'coordinates': [52.5200, 13.4050],
         'country_code': 'DE'
     },
+    'copenhagen': {
+        'name': 'Copenhagen, Denmark',
+        'coordinates': [55.6761, 12.5683],
+        'country_code': 'DK'
+    },
     'vienna': {
         'name': 'Vienna, Austria',
         'coordinates': [48.2082, 16.3738],
@@ -69,7 +75,111 @@ CITIES = {
         'name': 'Madrid, Spain',
         'coordinates': [40.4168, -3.7038],
         'country_code': 'ES'
+    },
+    'milano': {
+        'name': 'Milano, Italy',
+        'coordinates': [45.4642, 9.1900],
+        'country_code': 'IT'
+    },
+    'zurich': {
+        'name': 'Zürich, Switzerland',
+        'coordinates': [47.3769, 8.5417],
+        'country_code': 'CH'
+    },
+    'oslo': {
+        'name': 'Oslo, Norway',
+        'coordinates': [59.9139, 10.7522],
+        'country_code': 'NO'
+    },
+    'helsinki': {
+        'name': 'Helsinki, Finland',
+        'coordinates': [60.1695, 24.9354],
+        'country_code': 'FI'
+    },
+    'warsaw': {
+        'name': 'Warsaw, Poland',
+        'coordinates': [52.2297, 21.0122],
+        'country_code': 'PL'
+    },
+    'budapest': {
+        'name': 'Budapest, Hungary',
+        'coordinates': [47.4979, 19.0402],
+        'country_code': 'HU'
+    },
+    'dublin': {
+        'name': 'Dublin, Ireland',
+        'coordinates': [53.3498, -6.2603],
+        'country_code': 'IE'
+    },
+    'lisbon': {
+        'name': 'Lisbon, Portugal',
+        'coordinates': [38.7223, -9.1393],
+        'country_code': 'PT'
+    },
+    'brussels': {
+        'name': 'Brussels, Belgium',
+        'coordinates': [50.8503, 4.3517],
+        'country_code': 'BE'
+    },
+    'athens': {
+        'name': 'Athens, Greece',
+        'coordinates': [37.9838, 23.7275],
+        'country_code': 'GR'
+    },
+    'munich': {
+        'name': 'Munich, Germany',
+        'coordinates': [48.1351, 11.5820],
+        'country_code': 'DE'
+    },
+    'lyon': {
+        'name': 'Lyon, France',
+        'coordinates': [45.7640, 4.8357],
+        'country_code': 'FR'
+    },
+    'florence': {
+        'name': 'Florence, Italy',
+        'coordinates': [43.7696, 11.2558],
+        'country_code': 'IT'
+    },
+    'edinburgh': {
+        'name': 'Edinburgh, Scotland',
+        'coordinates': [55.9533, -3.1883],
+        'country_code': 'GB'
+    },
+    'nice': {
+        'name': 'Nice, France',
+        'coordinates': [43.7102, 7.2620],
+        'country_code': 'FR'
+    },
+    'palma': {
+        'name': 'Palma, Spain',
+        'coordinates': [39.5696, 2.6502],
+        'country_code': 'ES'
+    },
+    'santorini': {
+        'name': 'Santorini, Greece',
+        'coordinates': [36.3932, 25.4615],
+        'country_code': 'GR'
+    },
+    'ibiza': {
+        'name': 'Ibiza, Spain',
+        'coordinates': [38.9067, 1.4206],
+        'country_code': 'ES'
     }
+}
+
+# Country codes for localized booking URLs
+COUNTRY_CODES = {
+    'stockholm': 'sv', 'oslo': 'no', 'helsinki': 'fi', 'copenhagen': 'dk',
+    'paris': 'fr', 'lyon': 'fr', 'nice': 'fr',
+    'london': 'en-gb', 'edinburgh': 'en-gb',
+    'amsterdam': 'nl', 'brussels': 'nl',
+    'barcelona': 'es', 'madrid': 'es', 'palma': 'es', 'ibiza': 'es',
+    'rome': 'it', 'milano': 'it', 'florence': 'it',
+    'berlin': 'de', 'munich': 'de',
+    'vienna': 'de', 'zurich': 'de',
+    'prague': 'cs', 'warsaw': 'pl', 'budapest': 'hu',
+    'dublin': 'en-gb', 'lisbon': 'pt', 'athens': 'el', 'santorini': 'el'
 }
 
 # Room Types Configuration with Junior Suite
@@ -106,12 +216,12 @@ ROOM_TYPES = {
     }
 }
 
-def get_booking_com_hotels(city_info, checkin, checkout, adults, rooms, room_type):
+def get_booking_com_hotels(city_info, checkin, checkout, adults, rooms, room_type, city_key):
     """Get hotels from Booking.com via RapidAPI"""
     
     # Mock data for demonstration (replace with real API when you get keys)
     if RAPIDAPI_KEY_BOOKING == 'demo_key':
-        return generate_mock_hotels(city_info, 'booking.com', room_type)
+        return generate_mock_hotels(city_info, 'booking.com', room_type, city_key)
     
     # Real API implementation (when you have valid keys)
     try:
@@ -135,20 +245,20 @@ def get_booking_com_hotels(city_info, checkin, checkout, adults, rooms, room_typ
         
         if response.status_code == 200:
             data = response.json()
-            return process_booking_hotels(data, city_info, room_type)
+            return process_booking_hotels(data, city_info, room_type, city_key)
         
     except Exception as e:
         print(f"Booking.com API error: {e}")
     
     # Fallback to mock data
-    return generate_mock_hotels(city_info, 'booking.com', room_type)
+    return generate_mock_hotels(city_info, 'booking.com', room_type, city_key)
 
-def get_hotels_com_hotels(city_info, checkin, checkout, adults, rooms, room_type):
+def get_hotels_com_hotels(city_info, checkin, checkout, adults, rooms, room_type, city_key):
     """Get hotels from Hotels.com via RapidAPI"""
     
     # Mock data for demonstration (replace with real API when you get keys)
     if RAPIDAPI_KEY_HOTELS == 'demo_key':
-        return generate_mock_hotels(city_info, 'hotels.com', room_type)
+        return generate_mock_hotels(city_info, 'hotels.com', room_type, city_key)
     
     # Real API implementation (when you have valid keys)
     try:
@@ -175,15 +285,15 @@ def get_hotels_com_hotels(city_info, checkin, checkout, adults, rooms, room_type
         
         if response.status_code == 200:
             data = response.json()
-            return process_hotels_com_data(data, city_info, room_type)
+            return process_hotels_com_data(data, city_info, room_type, city_key)
             
     except Exception as e:
         print(f"Hotels.com API error: {e}")
     
     # Fallback to mock data
-    return generate_mock_hotels(city_info, 'hotels.com', room_type)
+    return generate_mock_hotels(city_info, 'hotels.com', room_type, city_key)
 
-def generate_mock_hotels(city_info, platform, room_type):
+def generate_mock_hotels(city_info, platform, room_type, city_key):
     """Generate realistic mock hotel data for demonstration"""
     
     room_info = ROOM_TYPES.get(room_type, ROOM_TYPES['double'])
@@ -200,49 +310,60 @@ def generate_mock_hotels(city_info, platform, room_type):
     hotels = []
     city_name = city_info['name'].split(',')[0]
     
-    for i in range(5):  # 5 hotels per platform
-        price_variation = 1 + (i * 0.2)  # Price variation between hotels
+    # Generate 25 hotels per platform (50 total)
+    for i in range(25):
+        price_variation = 1 + (i * 0.1)  # Price variation between hotels
         final_price = int(base_price * price_variation)
         
+        hotel_names = [
+            'Grand Hotel', 'Plaza', 'Royal', 'Central', 'Palace',
+            'Boutique', 'Heritage', 'Luxury', 'Comfort', 'Elite',
+            'Imperial', 'Metropolitan', 'Prestige', 'Premier', 'Classic',
+            'Modern', 'Elegant', 'Supreme', 'Deluxe', 'Executive',
+            'Continental', 'International', 'Majestic', 'Regal', 'Distinguished'
+        ]
+        
         hotel = {
-            'id': f"{platform}_{city_name.lower()}_{i+1}",
-            'name': f"{city_name} {['Grand Hotel', 'Plaza', 'Royal', 'Central', 'Palace'][i]}",
+            'id': f"{platform}_{city_key}_{i+1}",
+            'name': f"{city_name} {hotel_names[i]}",
             'address': f"{city_name} City Center",
             'coordinates': [
-                city_info['coordinates'][0] + (i * 0.01) - 0.02,
-                city_info['coordinates'][1] + (i * 0.01) - 0.02
+                city_info['coordinates'][0] + (i * 0.005) - 0.06,
+                city_info['coordinates'][1] + (i * 0.005) - 0.06
             ],
             'price': final_price,
             'currency': 'EUR',
-            'rating': round(4.0 + (i * 0.2), 1),
+            'rating': round(3.5 + (i * 0.05), 1),
             'platform': platform,
             'room_type': room_info['name'],
             'room_description': room_info['description'],
-            'booking_url': create_platform_booking_url(city_info, platform, room_type, i+1),
+            'booking_url': create_localized_booking_url(city_info, platform, room_type, hotel_names[i], city_key),
             'amenities': ['WiFi', 'Breakfast', 'Parking'] if room_type != 'suite' else ['WiFi', 'Breakfast', 'Spa', 'Room Service']
         }
         hotels.append(hotel)
     
     return hotels
 
-def create_platform_booking_url(city_info, platform, room_type, hotel_id):
-    """Create booking URLs for different platforms"""
+def create_localized_booking_url(city_info, platform, room_type, hotel_name, city_key):
+    """Create localized booking URLs with hotel names and country codes"""
     
     city_name = city_info['name'].split(',')[0].replace(' ', '+')
+    hotel_name_encoded = quote_plus(hotel_name)
+    country_code = COUNTRY_CODES.get(city_key, 'en-gb')
     
     if platform == 'booking.com':
-        return f"https://www.booking.com/searchresults.html?ss={city_name}&room_type={room_type}&hotel_id={hotel_id}"
+        return f"https://www.booking.com/searchresults.{country_code}.html?ss={hotel_name_encoded}&dest_type=hotel&room_type={room_type}"
     elif platform == 'hotels.com':
-        return f"https://www.hotels.com/search.do?destination={city_name}&room-type={room_type}&hotel-id={hotel_id}"
+        return f"https://www.hotels.com/search.do?destination={city_name}&room-type={room_type}&q-destination={hotel_name_encoded}"
     
     return "#"
 
-def process_booking_hotels(data, city_info, room_type):
+def process_booking_hotels(data, city_info, room_type, city_key):
     """Process real Booking.com API response"""
     hotels = []
     
     if 'data' in data:
-        for hotel_data in data['data'][:5]:  # Limit to 5 hotels
+        for i, hotel_data in enumerate(data['data'][:25]):  # Limit to 25 hotels
             hotel = {
                 'id': hotel_data.get('id'),
                 'name': hotel_data.get('name'),
@@ -256,7 +377,7 @@ def process_booking_hotels(data, city_info, room_type):
                 'rating': hotel_data.get('rating', 4.0),
                 'platform': 'booking.com',
                 'room_type': ROOM_TYPES.get(room_type, {}).get('name', 'Double Room'),
-                'booking_url': hotel_data.get('url', '#')
+                'booking_url': create_localized_booking_url(city_info, 'booking.com', room_type, hotel_data.get('name', 'Hotel'), city_key)
             }
             hotels.append(hotel)
     
@@ -321,7 +442,8 @@ def home():
             'Multi-platform price comparison',
             'Room type filtering (including Junior Suite)',
             'Real-time availability',
-            'European city coverage'
+            '29 European city coverage',
+            'Localized booking URLs'
         ]
     })
 
@@ -337,7 +459,9 @@ def test():
             'price_comparison': True,
             'room_filtering': True,
             'junior_suite': True,
-            'multi_platform': True
+            'multi_platform': True,
+            'localized_urls': True,
+            'city_coverage': '29 European destinations'
         }
     })
 
@@ -347,7 +471,7 @@ def get_cities():
     return jsonify({
         'cities': CITIES,
         'total': len(CITIES),
-        'coverage': 'Major European destinations'
+        'coverage': '29 Major European destinations'
     })
 
 @app.route('/api/room-types')
@@ -385,13 +509,13 @@ def search_hotels():
     # Search across multiple platforms
     print(f"🔍 Searching {city} for {room_type} rooms...")
     
-    # Get hotels from Booking.com
-    booking_hotels = get_booking_com_hotels(city_info, checkin, checkout, adults, rooms, room_type)
+    # Get hotels from Booking.com (25 hotels)
+    booking_hotels = get_booking_com_hotels(city_info, checkin, checkout, adults, rooms, room_type, city)
     
-    # Get hotels from Hotels.com  
-    hotels_com_hotels = get_hotels_com_hotels(city_info, checkin, checkout, adults, rooms, room_type)
+    # Get hotels from Hotels.com (25 hotels)
+    hotels_com_hotels = get_hotels_com_hotels(city_info, checkin, checkout, adults, rooms, room_type, city)
     
-    # Aggregate and compare prices
+    # Aggregate and compare prices (50 total hotels)
     all_hotels = aggregate_and_compare_prices(booking_hotels, hotels_com_hotels)
     
     # Calculate comparison stats
@@ -429,15 +553,18 @@ def search_hotels():
         'hotels': all_hotels,
         'total_found': total_hotels,
         'room_filter': 'enabled',
-        'junior_suite_available': room_type == 'junior_suite'
+        'junior_suite_available': room_type == 'junior_suite',
+        'localized_urls': 'enabled',
+        'url_type': 'hotel_name_based'
     })
 
 if __name__ == '__main__':
     print("🚀 Starting STAYFINDR Multi-Platform Backend...")
-    print("🏨 Supporting 10 European cities")
+    print("🏨 Supporting 29 European cities")
     print("🌍 Multi-platform aggregation: Booking.com + Hotels.com")
     print("🔍 Room type filtering with Junior Suite support")
     print("💰 Price comparison enabled")
+    print("🌐 Localized booking URLs for all countries")
     print("📋 Test API: /test")
     print("✅ Ready for frontend integration")
     
