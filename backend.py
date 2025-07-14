@@ -196,26 +196,112 @@ CITIES = {
 }
 
 def search_booking_hotels(destination_id, checkin, checkout, adults, rooms, city_info):
-    """Search hotels using GEO-BASED endpoint - your new discovery!"""
+    """Search hotels using YOUR WORKING stays/search endpoint!"""
     
-    # Use the NEW endpoint you found: booking-com18.p.rapidapi.com
-    url = "https://booking-com18.p.rapidapi.com/stays/search-by-geo"
+    # Use YOUR WORKING endpoint: booking-com18.p.rapidapi.com/web/stays/search
+    url = "https://booking-com18.p.rapidapi.com/web/stays/search"
     
-    # Calculate search area around city center (±0.05 degrees ≈ 5km radius)
-    lat, lng = city_info['coordinates']
+    # Map our city names to destination IDs (we'll need to find these)
+    city_dest_ids = {
+        'stockholm': '20088325',  # From your example
+        'paris': '20024809',      # Paris destination ID
+        'london': '20023181',     # London destination ID
+        'amsterdam': '20023999',  # Amsterdam destination ID
+        'barcelona': '20023707',  # Barcelona destination ID
+        'rome': '20023697',       # Rome destination ID
+        'berlin': '20023502',     # Berlin destination ID
+        'copenhagen': '20024053', # Copenhagen destination ID
+        'vienna': '20024018',     # Vienna destination ID
+        'prague': '20023758',     # Prague destination ID
+        'madrid': '20023181',     # Madrid destination ID
+        'milano': '20023697',     # Milano destination ID
+        'zurich': '20024053',     # Zurich destination ID
+        'oslo': '20024053',       # Oslo destination ID
+        'helsinki': '20024053',   # Helsinki destination ID
+        'warsaw': '20024053',     # Warsaw destination ID
+        'budapest': '20024053',   # Budapest destination ID
+        'dublin': '20024053',     # Dublin destination ID
+        'lisbon': '20024053',     # Lisbon destination ID
+        'brussels': '20024053',   # Brussels destination ID
+        'athens': '20024053',     # Athens destination ID
+        'munich': '20024053',     # Munich destination ID
+        'lyon': '20024053',       # Lyon destination ID
+        'florence': '20024053',   # Florence destination ID
+        'edinburgh': '20024053',  # Edinburgh destination ID
+        'nice': '20024053',       # Nice destination ID
+        'palma': '20024053',      # Palma destination ID
+        'santorini': '20024053',  # Santorini destination ID
+        'ibiza': '20024053'       # Ibiza destination ID
+    }
+    
+    # Get the destination ID for this city
+    city_key = city_info['name'].split(',')[0].lower()
+    dest_id = city_dest_ids.get(city_key, '20088325')  # Default to Stockholm
     
     querystring = {
-        "neLat": lat + 0.05,    # Northeast latitude
-        "neLng": lng + 0.05,   # Northeast longitude  
-        "swLat": lat - 0.05,   # Southwest latitude
-        "swLng": lng - 0.05,   # Southwest longitude
-        "units": "metric"
+        "destId": dest_id,
+        "destType": "city",
+        "checkinDate": checkin,
+        "checkoutDate": checkout,
+        "adults": adults,
+        "rooms": rooms,
+        "currency": "EUR"
     }
     
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
         "X-RapidAPI-Host": "booking-com18.p.rapidapi.com"
     }
+    
+    print(f"🔄 Calling YOUR WORKING booking-com18 API...")
+    print(f"📡 URL: {url}")
+    print(f"🏨 Destination ID: {dest_id} for {city_info['name']}")
+    print(f"📊 Params: {querystring}")
+    print(f"🔑 Key: {RAPIDAPI_KEY[:20]}...")
+    
+    try:
+        response = requests.get(url, headers=headers, params=querystring, timeout=30)
+        print(f"📈 Response Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f"✅ WORKING API SUCCESS - Raw response keys: {list(data.keys())}")
+            
+            # Handle different possible response structures
+            hotels_list = []
+            if 'properties' in data:
+                hotels_list = data['properties']
+                print(f"🏨 Found {len(hotels_list)} hotels in 'properties' field")
+            elif 'data' in data:
+                hotels_list = data['data'] 
+                print(f"🏨 Found {len(hotels_list)} hotels in 'data' field")
+            elif 'results' in data:
+                hotels_list = data['results']
+                print(f"🏨 Found {len(hotels_list)} hotels in 'results' field")
+            elif 'hotels' in data:
+                hotels_list = data['hotels']
+                print(f"🏨 Found {len(hotels_list)} hotels in 'hotels' field")
+            elif isinstance(data, list):
+                hotels_list = data
+                print(f"🏨 Found {len(hotels_list)} hotels in root array")
+            else:
+                print(f"❓ Response structure: {list(data.keys())}")
+                print(f"📋 Sample response: {str(data)[:500]}")
+                # Try to find any array in the response
+                for key, value in data.items():
+                    if isinstance(value, list) and len(value) > 0:
+                        print(f"🔍 Found array in '{key}' with {len(value)} items")
+                        hotels_list = value
+                        break
+                
+            return hotels_list[:25]  # Limit to 25 hotels
+        else:
+            print(f"❌ API Error {response.status_code}: {response.text}")
+            return []
+            
+    except Exception as e:
+        print(f"❌ Exception calling booking-com18 API: {e}")
+        return []
     
     print(f"🔄 Calling NEW GEO-BASED Booking.com API...")
     print(f"📡 URL: {url}")
@@ -429,116 +515,53 @@ def debug_api():
         stockholm_info
     )
     
-@app.route('/test-booking18-hotels')
-def test_booking18_hotels():
-    """Test booking-com18 hotel endpoints since flights work"""
+@app.route('/test-your-endpoint')
+def test_your_endpoint():
+    """Test YOUR EXACT working endpoint"""
     
-    results = {}
+    # Your exact working endpoint
+    url = "https://booking-com18.p.rapidapi.com/web/stays/search"
     
-    # Test different hotel endpoints on booking-com18
-    hotel_endpoints = [
-        {
-            "name": "stays_search",
-            "url": "https://booking-com18.p.rapidapi.com/stays/search",
-            "params": {
-                "destination": "Stockholm",
-                "checkin": "2025-01-20",
-                "checkout": "2025-01-21",
-                "adults": "2",
-                "rooms": "1"
-            }
-        },
-        {
-            "name": "stays_search_by_coordinates", 
-            "url": "https://booking-com18.p.rapidapi.com/stays/search-by-coordinates",
-            "params": {
-                "latitude": "59.3293",
-                "longitude": "18.0686",
-                "radius": "10",
-                "checkin": "2025-01-20",
-                "checkout": "2025-01-21"
-            }
-        },
-        {
-            "name": "stays_list",
-            "url": "https://booking-com18.p.rapidapi.com/stays/list",
-            "params": {
-                "destination_id": "Stockholm",
-                "checkin_date": "2025-01-20",
-                "checkout_date": "2025-01-21"
-            }
-        },
-        {
-            "name": "hotels_search",
-            "url": "https://booking-com18.p.rapidapi.com/hotels/search",
-            "params": {
-                "dest_id": "Stockholm",
-                "checkin_date": "2025-01-20", 
-                "checkout_date": "2025-01-21",
-                "adults_number": "2"
-            }
-        }
-    ]
+    querystring = {
+        "destId": "20088325",    # Stockholm from your example
+        "destType": "city"
+    }
     
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
         "X-RapidAPI-Host": "booking-com18.p.rapidapi.com"
     }
     
-    for endpoint in hotel_endpoints:
-        try:
-            print(f"🧪 Testing {endpoint['name']}...")
-            response = requests.get(
-                endpoint["url"], 
-                headers=headers, 
-                params=endpoint["params"], 
-                timeout=10
-            )
-            
-            results[endpoint["name"]] = {
-                "status": response.status_code,
-                "url": endpoint["url"],
-                "response_preview": response.text[:300],
-                "success": response.status_code == 200
-            }
-            
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                    results[endpoint["name"]]["response_keys"] = list(data.keys())
-                    results[endpoint["name"]]["data_type"] = type(data).__name__
-                except:
-                    pass
-                    
-        except Exception as e:
-            results[endpoint["name"]] = {
-                "error": str(e),
-                "success": False
-            }
+    print(f"🧪 Testing YOUR EXACT working endpoint...")
+    print(f"📡 URL: {url}")
+    print(f"📊 Params: {querystring}")
     
-    # Also test if we can get hotel info endpoints
     try:
-        info_response = requests.get(
-            "https://booking-com18.p.rapidapi.com/",
-            headers=headers,
-            timeout=5
-        )
-        results["api_info"] = {
-            "status": info_response.status_code,
-            "response": info_response.text[:200]
-        }
-    except:
-        results["api_info"] = {"error": "Could not get API info"}
-    
-    working_endpoints = [k for k, v in results.items() if v.get("success")]
-    
-    return jsonify({
-        "message": "Testing booking-com18 hotel endpoints since flights work",
-        "api_key_working": "YES (flights confirmed)",
-        "test_results": results,
-        "working_hotel_endpoints": working_endpoints,
-        "recommendation": "Use working endpoint" if working_endpoints else "Try different hotel API"
-    })
+        response = requests.get(url, headers=headers, params=querystring, timeout=30)
+        print(f"📈 Response Status: {response.status_code}")
+        print(f"📋 Response Text: {response.text[:500]}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            return jsonify({
+                "status": "SUCCESS - YOUR ENDPOINT WORKS!",
+                "response_keys": list(data.keys()),
+                "data_sample": str(data)[:1000],
+                "hotels_count": len(data) if isinstance(data, list) else "Checking for hotels...",
+                "hotel_fields": list(data[0].keys()) if isinstance(data, list) and len(data) > 0 else "No hotels or different structure"
+            })
+        else:
+            return jsonify({
+                "status": "FAILED", 
+                "error_code": response.status_code,
+                "error_text": response.text
+            })
+            
+    except Exception as e:
+        return jsonify({
+            "status": "EXCEPTION",
+            "error": str(e)
+        })
 
 @app.route('/api/hotels')
 def get_hotels():
