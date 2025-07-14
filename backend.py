@@ -195,33 +195,31 @@ CITIES = {
     }
 }
 
-def search_booking_hotels(destination_id, checkin, checkout, adults, rooms):
-    """Search hotels using EXACT SAME endpoint as your successful test"""
+def search_booking_hotels(destination_id, checkin, checkout, adults, rooms, city_info):
+    """Search hotels using GEO-BASED endpoint - your new discovery!"""
     
-    # Use the EXACT endpoint that worked in your RapidAPI test
-    url = "https://booking-com.p.rapidapi.com/v1/hotels/search"
+    # Use the NEW endpoint you found: booking-com18.p.rapidapi.com
+    url = "https://booking-com18.p.rapidapi.com/stays/search-by-geo"
     
-    # Use EXACT parameters from your working test
+    # Calculate search area around city center (±0.05 degrees ≈ 5km radius)
+    lat, lng = city_info['coordinates']
+    
     querystring = {
-        "room_number": rooms,
-        "dest_id": destination_id,
-        "dest_type": "city",
-        "checkin_date": checkin,
-        "checkout_date": checkout,
-        "adults_number": adults,
-        "order_by": "popularity",
-        "filter_by_currency": "EUR",
-        "locale": "en-gb",
+        "neLat": lat + 0.05,    # Northeast latitude
+        "neLng": lng + 0.05,   # Northeast longitude  
+        "swLat": lat - 0.05,   # Southwest latitude
+        "swLng": lng - 0.05,   # Southwest longitude
         "units": "metric"
     }
     
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
-        "X-RapidAPI-Host": "booking-com.p.rapidapi.com"
+        "X-RapidAPI-Host": "booking-com18.p.rapidapi.com"
     }
     
-    print(f"🔄 Calling REAL Booking.com API...")
+    print(f"🔄 Calling NEW GEO-BASED Booking.com API...")
     print(f"📡 URL: {url}")
+    print(f"🗺️ Search area: {lat-0.05},{lng-0.05} to {lat+0.05},{lng+0.05}")
     print(f"📊 Params: {querystring}")
     print(f"🔑 Key: {RAPIDAPI_KEY[:20]}...")
     
@@ -231,26 +229,34 @@ def search_booking_hotels(destination_id, checkin, checkout, adults, rooms):
         
         if response.status_code == 200:
             data = response.json()
-            print(f"✅ API SUCCESS - Raw response keys: {list(data.keys())}")
+            print(f"✅ GEO API SUCCESS - Raw response keys: {list(data.keys())}")
             
-            # Handle the response structure from your successful test
-            if 'result' in data:
-                hotels_list = data['result']
-                print(f"🏨 Found {len(hotels_list)} hotels in 'result' field")
-                return hotels_list[:25]  # Limit to 25 hotels
+            # Handle different possible response structures
+            hotels_list = []
+            if 'properties' in data:
+                hotels_list = data['properties']
+                print(f"🏨 Found {len(hotels_list)} hotels in 'properties' field")
             elif 'data' in data:
                 hotels_list = data['data'] 
                 print(f"🏨 Found {len(hotels_list)} hotels in 'data' field")
-                return hotels_list[:25]
+            elif 'results' in data:
+                hotels_list = data['results']
+                print(f"🏨 Found {len(hotels_list)} hotels in 'results' field")
+            elif isinstance(data, list):
+                hotels_list = data
+                print(f"🏨 Found {len(hotels_list)} hotels in root array")
             else:
-                print(f"❌ Unexpected response structure: {data}")
+                print(f"❌ Unexpected geo response structure: {list(data.keys())}")
+                print(f"📋 Sample response: {str(data)[:500]}")
                 return []
+                
+            return hotels_list[:25]  # Limit to 25 hotels
         else:
-            print(f"❌ API Error {response.status_code}: {response.text}")
+            print(f"❌ GEO API Error {response.status_code}: {response.text}")
             return []
             
     except Exception as e:
-        print(f"❌ Exception calling Booking.com API: {e}")
+        print(f"❌ Exception calling GEO Booking.com API: {e}")
         return []
 
 def create_booking_url(hotel, city_info, checkin, checkout, adults, rooms):
@@ -285,16 +291,24 @@ def create_booking_url(hotel, city_info, checkin, checkout, adults, rooms):
     return f"https://www.booking.com/searchresults.{city_info['country_code']}.html?ss={hotel_name.replace(' ', '+')}"
 
 def process_hotel_data(hotels_data, city_info, checkin, checkout, adults, rooms):
-    """Process real hotel data from Booking.com API"""
+    """Process real hotel data from GEO-BASED Booking.com API"""
     processed_hotels = []
     
     for i, hotel in enumerate(hotels_data):
-        # Extract real hotel information
-        hotel_name = hotel.get('hotel_name') or hotel.get('name', f"Hotel_{i}")
+        # Extract real hotel information - handle different field names
+        hotel_name = (hotel.get('hotel_name') or 
+                     hotel.get('name') or 
+                     hotel.get('property_name') or 
+                     hotel.get('title') or 
+                     f"Hotel_{i}")
         
         # Get real coordinates if available
-        latitude = hotel.get('latitude')
-        longitude = hotel.get('longitude')
+        latitude = (hotel.get('latitude') or 
+                   hotel.get('lat') or 
+                   hotel.get('location', {}).get('lat'))
+        longitude = (hotel.get('longitude') or 
+                    hotel.get('lng') or 
+                    hotel.get('location', {}).get('lng'))
         
         if latitude and longitude:
             coordinates = [float(latitude), float(longitude)]
@@ -306,34 +320,50 @@ def process_hotel_data(hotels_data, city_info, checkin, checkout, adults, rooms)
                 base_lng + (i * 0.002) - 0.01
             ]
         
-        # Extract real pricing
+        # Extract real pricing - handle different price fields
         price = 'N/A'
-        if 'min_total_price' in hotel:
-            price = int(float(hotel['min_total_price']))
-        elif 'price_breakdown' in hotel:
-            if 'gross_price' in hotel['price_breakdown']:
-                price = int(float(hotel['price_breakdown']['gross_price']))
-        elif 'composite_price_breakdown' in hotel:
-            if 'gross_amount_per_night' in hotel['composite_price_breakdown']:
-                price = int(float(hotel['composite_price_breakdown']['gross_amount_per_night']['value']))
+        price_fields = [
+            'min_total_price', 'price', 'rate', 'min_price',
+            'price_breakdown.gross_price', 'rates.price'
+        ]
+        
+        for field in price_fields:
+            if '.' in field:
+                # Handle nested fields
+                parts = field.split('.')
+                value = hotel.get(parts[0], {}).get(parts[1])
+            else:
+                value = hotel.get(field)
+            
+            if value and str(value).replace('.', '').isdigit():
+                price = int(float(value))
+                break
         
         # Extract real rating
         rating = 4.0  # Default
-        if 'review_score' in hotel:
-            rating = float(hotel['review_score']) / 2 if float(hotel['review_score']) > 5 else float(hotel['review_score'])
-        elif 'rating' in hotel:
-            rating = float(hotel['rating'])
+        rating_fields = ['review_score', 'rating', 'stars', 'score']
+        
+        for field in rating_fields:
+            if field in hotel and hotel[field]:
+                rating_val = float(hotel[field])
+                # Normalize to 5-point scale
+                rating = rating_val / 2 if rating_val > 5 else rating_val
+                break
         
         # Extract real address
-        address = hotel.get('address', city_info['name'])
-        if 'district' in hotel:
-            address = f"{hotel['district']}, {city_info['name']}"
+        address = (hotel.get('address') or 
+                  hotel.get('location_string') or 
+                  hotel.get('district') or 
+                  city_info['name'])
         
         # Create real booking URL
         booking_url = create_booking_url(hotel, city_info, checkin, checkout, adults, rooms)
         
         processed_hotel = {
-            'id': hotel.get('hotel_id') or hotel.get('id') or f"booking_real_{i}",
+            'id': (hotel.get('hotel_id') or 
+                  hotel.get('id') or 
+                  hotel.get('property_id') or 
+                  f"booking_geo_{i}"),
             'name': hotel_name,
             'address': address,
             'coordinates': coordinates,
@@ -343,11 +373,11 @@ def process_hotel_data(hotels_data, city_info, checkin, checkout, adults, rooms)
             'platform': 'booking.com',
             'currency': 'EUR',
             'amenities': ['WiFi', 'Reception', 'Concierge'],
-            'source': 'REAL_BOOKING_API'
+            'source': 'REAL_GEO_BOOKING_API'
         }
         
         processed_hotels.append(processed_hotel)
-        print(f"✅ Processed REAL hotel: {hotel_name} - €{price}")
+        print(f"✅ Processed REAL GEO hotel: {hotel_name} - €{price}")
     
     return processed_hotels
 
@@ -388,16 +418,126 @@ def test():
 
 @app.route('/debug-api')
 def debug_api():
-    """Debug API connectivity"""
-    test_result = search_booking_hotels('-2735409', '2025-01-20', '2025-01-21', '2', '1')
+    """Debug GEO API connectivity"""
+    stockholm_info = CITIES['stockholm']
+    test_result = search_booking_hotels(
+        stockholm_info['destination_id'], 
+        '2025-01-20', 
+        '2025-01-21', 
+        '2', 
+        '1',
+        stockholm_info
+    )
+    
+@app.route('/test-booking18-hotels')
+def test_booking18_hotels():
+    """Test booking-com18 hotel endpoints since flights work"""
+    
+    results = {}
+    
+    # Test different hotel endpoints on booking-com18
+    hotel_endpoints = [
+        {
+            "name": "stays_search",
+            "url": "https://booking-com18.p.rapidapi.com/stays/search",
+            "params": {
+                "destination": "Stockholm",
+                "checkin": "2025-01-20",
+                "checkout": "2025-01-21",
+                "adults": "2",
+                "rooms": "1"
+            }
+        },
+        {
+            "name": "stays_search_by_coordinates", 
+            "url": "https://booking-com18.p.rapidapi.com/stays/search-by-coordinates",
+            "params": {
+                "latitude": "59.3293",
+                "longitude": "18.0686",
+                "radius": "10",
+                "checkin": "2025-01-20",
+                "checkout": "2025-01-21"
+            }
+        },
+        {
+            "name": "stays_list",
+            "url": "https://booking-com18.p.rapidapi.com/stays/list",
+            "params": {
+                "destination_id": "Stockholm",
+                "checkin_date": "2025-01-20",
+                "checkout_date": "2025-01-21"
+            }
+        },
+        {
+            "name": "hotels_search",
+            "url": "https://booking-com18.p.rapidapi.com/hotels/search",
+            "params": {
+                "dest_id": "Stockholm",
+                "checkin_date": "2025-01-20", 
+                "checkout_date": "2025-01-21",
+                "adults_number": "2"
+            }
+        }
+    ]
+    
+    headers = {
+        "X-RapidAPI-Key": RAPIDAPI_KEY,
+        "X-RapidAPI-Host": "booking-com18.p.rapidapi.com"
+    }
+    
+    for endpoint in hotel_endpoints:
+        try:
+            print(f"🧪 Testing {endpoint['name']}...")
+            response = requests.get(
+                endpoint["url"], 
+                headers=headers, 
+                params=endpoint["params"], 
+                timeout=10
+            )
+            
+            results[endpoint["name"]] = {
+                "status": response.status_code,
+                "url": endpoint["url"],
+                "response_preview": response.text[:300],
+                "success": response.status_code == 200
+            }
+            
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    results[endpoint["name"]]["response_keys"] = list(data.keys())
+                    results[endpoint["name"]]["data_type"] = type(data).__name__
+                except:
+                    pass
+                    
+        except Exception as e:
+            results[endpoint["name"]] = {
+                "error": str(e),
+                "success": False
+            }
+    
+    # Also test if we can get hotel info endpoints
+    try:
+        info_response = requests.get(
+            "https://booking-com18.p.rapidapi.com/",
+            headers=headers,
+            timeout=5
+        )
+        results["api_info"] = {
+            "status": info_response.status_code,
+            "response": info_response.text[:200]
+        }
+    except:
+        results["api_info"] = {"error": "Could not get API info"}
+    
+    working_endpoints = [k for k, v in results.items() if v.get("success")]
     
     return jsonify({
-        "api_test": "Stockholm hotels search",
-        "api_key_present": bool(RAPIDAPI_KEY and len(RAPIDAPI_KEY) > 10),
-        "api_key_preview": RAPIDAPI_KEY[:20] + "..." if RAPIDAPI_KEY else "MISSING",
-        "hotels_found": len(test_result),
-        "sample_hotel": test_result[0] if test_result else "No hotels returned",
-        "status": "SUCCESS" if test_result else "FAILED"
+        "message": "Testing booking-com18 hotel endpoints since flights work",
+        "api_key_working": "YES (flights confirmed)",
+        "test_results": results,
+        "working_hotel_endpoints": working_endpoints,
+        "recommendation": "Use working endpoint" if working_endpoints else "Try different hotel API"
     })
 
 @app.route('/api/hotels')
@@ -421,13 +561,14 @@ def get_hotels():
     print(f"📅 Dates: {checkin} to {checkout}")
     print(f"👥 Guests: {adults} adults, {rooms} rooms")
     
-    # Force real API call - NO FALLBACKS
+    # Force real API call with GEO endpoint - NO FALLBACKS
     hotels_data = search_booking_hotels(
         city_info['destination_id'], 
         checkin, 
         checkout, 
         adults, 
-        rooms
+        rooms,
+        city_info  # Pass city_info for coordinates
     )
     
     if not hotels_data:
