@@ -241,8 +241,8 @@ def search_booking_hotels(destination_id, checkin, checkout, adults, rooms, city
     querystring = {
         "destId": dest_id,
         "destType": "city",
-        "checkinDate": checkin,
-        "checkoutDate": checkout,
+        "checkIn": checkin,         # Fixed parameter name
+        "checkOut": checkout,       # Fixed parameter name  
         "adults": adults,
         "rooms": rooms,
         "currency": "EUR"
@@ -517,14 +517,19 @@ def debug_api():
     
 @app.route('/test-your-endpoint')
 def test_your_endpoint():
-    """Test YOUR EXACT working endpoint"""
+    """Test YOUR EXACT working endpoint WITH required dates"""
     
     # Your exact working endpoint
     url = "https://booking-com18.p.rapidapi.com/web/stays/search"
     
     querystring = {
-        "destId": "20088325",    # Stockholm from your example
-        "destType": "city"
+        "destId": "20088325",       # Stockholm from your example
+        "destType": "city",
+        "checkIn": "2025-01-20",    # Required parameter!
+        "checkOut": "2025-01-21",   # Required parameter!
+        "adults": "2",
+        "rooms": "1",
+        "currency": "EUR"
     }
     
     headers = {
@@ -532,24 +537,49 @@ def test_your_endpoint():
         "X-RapidAPI-Host": "booking-com18.p.rapidapi.com"
     }
     
-    print(f"🧪 Testing YOUR EXACT working endpoint...")
+    print(f"🧪 Testing YOUR EXACT working endpoint WITH DATES...")
     print(f"📡 URL: {url}")
     print(f"📊 Params: {querystring}")
     
     try:
         response = requests.get(url, headers=headers, params=querystring, timeout=30)
         print(f"📈 Response Status: {response.status_code}")
-        print(f"📋 Response Text: {response.text[:500]}")
+        print(f"📋 Response Text: {response.text[:1000]}")
         
         if response.status_code == 200:
             data = response.json()
-            return jsonify({
-                "status": "SUCCESS - YOUR ENDPOINT WORKS!",
-                "response_keys": list(data.keys()),
-                "data_sample": str(data)[:1000],
-                "hotels_count": len(data) if isinstance(data, list) else "Checking for hotels...",
-                "hotel_fields": list(data[0].keys()) if isinstance(data, list) and len(data) > 0 else "No hotels or different structure"
-            })
+            
+            # Check if we got real hotel data now
+            if data.get('status') and data.get('data'):
+                hotel_data = data['data']
+                hotels = []
+                
+                # Try to extract hotels from different possible structures
+                if isinstance(hotel_data, list):
+                    hotels = hotel_data
+                elif isinstance(hotel_data, dict):
+                    for key in ['properties', 'hotels', 'results', 'items']:
+                        if key in hotel_data and isinstance(hotel_data[key], list):
+                            hotels = hotel_data[key]
+                            break
+                
+                return jsonify({
+                    "status": "SUCCESS WITH REAL HOTEL DATA!",
+                    "response_keys": list(data.keys()),
+                    "hotels_found": len(hotels),
+                    "sample_hotel": hotels[0] if hotels else "No hotels in expected structure",
+                    "sample_hotel_fields": list(hotels[0].keys()) if hotels else [],
+                    "data_structure": type(hotel_data).__name__,
+                    "full_response_sample": str(data)[:2000]
+                })
+            else:
+                return jsonify({
+                    "status": "API WORKS BUT STILL HAS ERRORS",
+                    "response_keys": list(data.keys()),
+                    "errors": data.get('errors', 'No errors field'),
+                    "message": data.get('message', 'No message field'),
+                    "full_response": str(data)[:1000]
+                })
         else:
             return jsonify({
                 "status": "FAILED", 
