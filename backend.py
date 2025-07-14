@@ -177,8 +177,8 @@ def test_simple():
     params = {
         "destId": "20088325",  # Stockholm
         "destType": "city",
-        "checkIn": "2025-01-20",
-        "checkOut": "2025-01-21"
+        "checkIn": "2025-07-15",   # FIXED: Use valid future date
+        "checkOut": "2025-07-16"   # FIXED: Use valid future date
     }
     headers = {
         "x-rapidapi-host": "booking-com18.p.rapidapi.com",
@@ -215,8 +215,8 @@ def get_hotels():
     """Get real hotels using working endpoint"""
     
     city = request.args.get('city', 'stockholm')
-    checkin = request.args.get('checkin', '2025-01-20')
-    checkout = request.args.get('checkout', '2025-01-21')
+    checkin = request.args.get('checkin', '2025-07-15')   # FIXED: Default to valid date
+    checkout = request.args.get('checkout', '2025-07-16') # FIXED: Default to valid date
     adults = request.args.get('adults', '2')
     rooms = request.args.get('rooms', '1')
     
