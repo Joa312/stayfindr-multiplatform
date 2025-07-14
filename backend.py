@@ -87,64 +87,46 @@ def search_real_hotels(dest_id, checkin, checkout, adults, rooms):
                 print(f"🔍 Hotel data type: {type(hotel_data)}")
                 print(f"🔍 Hotel data keys: {list(hotel_data.keys()) if isinstance(hotel_data, dict) else 'Not a dict'}")
                 
-                # Handle GraphQL SearchQueryOutput structure
-                hotels = []
-                
-                # Look for properties/results in the SearchQueryOutput
-                if isinstance(hotel_data, dict):
-                    # FOUND IT! Hotels are in 'results' field from GraphQL
-                    if 'results' in hotel_data and isinstance(hotel_data['results'], list):
-                        hotels = hotel_data['results']
-                        print(f"🏨 Found {len(hotels)} hotels in 'results' field (GraphQL)")
+                # Check specifically for 'results' field
+                if isinstance(hotel_data, dict) and 'results' in hotel_data:
+                    results = hotel_data['results']
+                    print(f"🎯 FOUND results field! Type: {type(results)}, Length: {len(results) if isinstance(results, list) else 'Not a list'}")
+                    
+                    if isinstance(results, list):
+                        print(f"🏨 Results array has {len(results)} items")
+                        if results:
+                            print(f"📋 First result type: {type(results[0])}")
+                            if isinstance(results[0], dict):
+                                print(f"📋 First result keys: {list(results[0].keys())}")
+                                print(f"📋 First result sample: {str(results[0])[:500]}")
                         
-                        # Show sample hotel structure for debugging
-                        if hotels:
-                            print(f"📋 Sample hotel keys: {list(hotels[0].keys()) if isinstance(hotels[0], dict) else 'Not a dict'}")
-                            if isinstance(hotels[0], dict):
-                                # Look for common hotel data patterns
-                                for key, value in list(hotels[0].items())[:5]:  # First 5 fields
-                                    print(f"🔍 Hotel field '{key}': {type(value).__name__}")
-                        
-                        return hotels[:25]  # Return up to 25 hotels
-                    
-                    # Fallback: Try other common GraphQL fields
-                    possible_hotel_fields = [
-                        'properties', 'hotels', 'items', 'accommodations',
-                        'searchResults', 'propertySearchResults', 'stays'
-                    ]
-                    
-                    for field in possible_hotel_fields:
-                        if field in hotel_data and isinstance(hotel_data[field], list):
-                            hotels = hotel_data[field]
-                            print(f"🏨 Found {len(hotels)} hotels in '{field}' field")
-                            return hotels[:25]
-                    
-                    # If no direct array, check nested structures
-                    if not hotels:
-                        print(f"🔍 Searching nested structures in GraphQL response...")
-                        # Print first level to understand structure
-                        for key, value in hotel_data.items():
-                            if isinstance(value, dict):
-                                print(f"🔍 Nested object '{key}' has keys: {list(value.keys())}")
-                                # Check nested objects for hotel arrays
-                                for nested_key, nested_value in value.items():
-                                    if isinstance(nested_value, list) and len(nested_value) > 0:
-                                        # Check if this looks like hotel data
-                                        if isinstance(nested_value[0], dict) and any(hotel_field in str(nested_value[0]) for hotel_field in ['name', 'title', 'property', 'hotel']):
-                                            hotels = nested_value
-                                            print(f"🏨 Found {len(hotels)} hotels in nested '{key}.{nested_key}' field")
-                                            break
-                                if hotels:
-                                    break
-                
-                if hotels:
-                    print(f"✅ Successfully extracted {len(hotels)} hotels")
-                    print(f"📋 Sample hotel keys: {list(hotels[0].keys()) if hotels else 'No hotels'}")
-                    return hotels[:25]
+                        hotels = results
+                        print(f"✅ Successfully extracted {len(hotels)} hotels from results")
+                        return hotels[:25]
+                    else:
+                        print(f"❌ Results field exists but is not a list: {type(results)}")
                 else:
-                    print(f"❌ No hotels found in expected structure")
-                    print(f"📋 Full response sample: {str(data)[:1000]}")
-                    return []
+                    print(f"❌ No 'results' field found in hotel_data")
+                
+                # Fallback search if results not found
+                print(f"🔍 Searching all fields for hotel arrays...")
+                for key, value in hotel_data.items():
+                    if isinstance(value, list) and len(value) > 0:
+                        print(f"🔍 Found array '{key}' with {len(value)} items")
+                        if isinstance(value[0], dict):
+                            # Check if this looks like hotel data
+                            first_item_keys = list(value[0].keys())
+                            print(f"🔍 Array '{key}' first item keys: {first_item_keys}")
+                            
+                            # Look for hotel-like fields
+                            hotel_indicators = ['name', 'title', 'property', 'hotel', 'displayName', 'price', 'rating']
+                            if any(indicator in str(first_item_keys).lower() for indicator in hotel_indicators):
+                                print(f"🏨 Array '{key}' looks like hotel data!")
+                                hotels = value
+                                return hotels[:25]
+                
+                print(f"❌ No hotel arrays found in any field")
+                return []
             else:
                 print(f"❌ API returned errors: {data.get('errors', 'Unknown error')}")
                 return []
