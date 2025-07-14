@@ -15,36 +15,36 @@ CORS(app)
 # API Configuration
 RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY_BOOKING', 'e1d84ea6ffmsha47402150e4b4a7p1ad726jsn90c5c8f86999')
 
-# European Cities with destination IDs
+# European Cities with corrected destination IDs
 CITIES = {
     'stockholm': {
         'name': 'Stockholm, Sweden',
         'coordinates': [59.3293, 18.0686],
-        'dest_id': '20088325',  # Your verified working ID
+        'dest_id': '-2735409',  # Try negative format (common for Booking.com)
         'country_code': 'se'
     },
     'paris': {
         'name': 'Paris, France', 
         'coordinates': [48.8566, 2.3522],
-        'dest_id': '20024809',
+        'dest_id': '-1456928',  # Paris destination ID
         'country_code': 'fr'
     },
     'london': {
         'name': 'London, UK',
         'coordinates': [51.5074, -0.1278],
-        'dest_id': '20023181',
+        'dest_id': '-2601889',  # London destination ID
         'country_code': 'gb'
     },
     'amsterdam': {
         'name': 'Amsterdam, Netherlands',
         'coordinates': [52.3676, 4.9041],
-        'dest_id': '20023999',
+        'dest_id': '-2140479',
         'country_code': 'nl'
     },
     'barcelona': {
         'name': 'Barcelona, Spain',
         'coordinates': [41.3851, 2.1734],
-        'dest_id': '20023707',
+        'dest_id': '-372490',
         'country_code': 'es'
     }
 }
@@ -175,10 +175,10 @@ def test_simple():
     
     url = "https://booking-com18.p.rapidapi.com/web/stays/search"
     params = {
-        "destId": "20088325",  # Stockholm
+        "destId": "-2735409",  # Try negative Stockholm ID format
         "destType": "city",
-        "checkIn": "2025-07-15",   # FIXED: Use valid future date
-        "checkOut": "2025-07-16"   # FIXED: Use valid future date
+        "checkIn": "2025-07-15",
+        "checkOut": "2025-07-16"
     }
     headers = {
         "x-rapidapi-host": "booking-com18.p.rapidapi.com",
@@ -196,6 +196,7 @@ def test_simple():
                 "has_data": bool(data.get('data')),
                 "has_errors": bool(data.get('errors')),
                 "response_keys": list(data.keys()),
+                "testing_dest_id": "-2735409 (negative format)",
                 "sample_response": str(data)[:1000]
             })
         else:
