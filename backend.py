@@ -92,9 +92,24 @@ def search_real_hotels(dest_id, checkin, checkout, adults, rooms):
                 
                 # Look for properties/results in the SearchQueryOutput
                 if isinstance(hotel_data, dict):
-                    # Common GraphQL hotel result fields
+                    # FOUND IT! Hotels are in 'results' field from GraphQL
+                    if 'results' in hotel_data and isinstance(hotel_data['results'], list):
+                        hotels = hotel_data['results']
+                        print(f"🏨 Found {len(hotels)} hotels in 'results' field (GraphQL)")
+                        
+                        # Show sample hotel structure for debugging
+                        if hotels:
+                            print(f"📋 Sample hotel keys: {list(hotels[0].keys()) if isinstance(hotels[0], dict) else 'Not a dict'}")
+                            if isinstance(hotels[0], dict):
+                                # Look for common hotel data patterns
+                                for key, value in list(hotels[0].items())[:5]:  # First 5 fields
+                                    print(f"🔍 Hotel field '{key}': {type(value).__name__}")
+                        
+                        return hotels[:25]  # Return up to 25 hotels
+                    
+                    # Fallback: Try other common GraphQL fields
                     possible_hotel_fields = [
-                        'properties', 'hotels', 'results', 'items', 'accommodations',
+                        'properties', 'hotels', 'items', 'accommodations',
                         'searchResults', 'propertySearchResults', 'stays'
                     ]
                     
@@ -102,7 +117,7 @@ def search_real_hotels(dest_id, checkin, checkout, adults, rooms):
                         if field in hotel_data and isinstance(hotel_data[field], list):
                             hotels = hotel_data[field]
                             print(f"🏨 Found {len(hotels)} hotels in '{field}' field")
-                            break
+                            return hotels[:25]
                     
                     # If no direct array, check nested structures
                     if not hotels:
@@ -150,11 +165,14 @@ def process_hotels(hotels, city_info):
         
         # Extract hotel info from GraphQL structure
         # Try multiple possible field names for hotel name
-        name_fields = ['name', 'title', 'displayName', 'hotelName', 'propertyName', 'basicPropertyData.displayName']
+        name_fields = [
+            'name', 'title', 'displayName', 'hotelName', 'propertyName', 
+            'basicPropertyData.displayName', 'displayName.text', 'property.name'
+        ]
         name = None
         
         for field in name_fields:
-            if '.' in field:  # Handle nested fields
+            if '.' in field:  # Handle nested fields like basicPropertyData.displayName
                 parts = field.split('.')
                 value = hotel
                 for part in parts:
@@ -163,12 +181,21 @@ def process_hotels(hotels, city_info):
                     else:
                         value = None
                         break
-                if value:
+                if value and isinstance(value, str):
                     name = value
                     break
-            elif field in hotel:
-                name = hotel[field]
+            elif field in hotel and hotel[field]:
+                name = str(hotel[field])
                 break
+        
+        # If still no name, try to find ANY text field that looks like a name
+        if not name:
+            for key, value in hotel.items():
+                if isinstance(value, str) and len(value) > 3 and len(value) < 100:
+                    # Skip obvious non-name fields
+                    if key not in ['id', 'url', 'type', '__typename'] and 'hotel' in value.lower():
+                        name = value
+                        break
         
         if not name:
             name = f"Stockholm Hotel {i+1}"  # Better fallback name
