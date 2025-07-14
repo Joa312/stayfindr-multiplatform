@@ -251,6 +251,17 @@ def get_hotels():
     rooms = request.args.get('rooms', '1')
     room_type = request.args.get('room_type', 'double')
     
+    # Calculate number of nights
+    from datetime import datetime
+    try:
+        checkin_date = datetime.strptime(checkin, '%Y-%m-%d')
+        checkout_date = datetime.strptime(checkout, '%Y-%m-%d')
+        nights = (checkout_date - checkin_date).days
+        if nights <= 0:
+            nights = 1  # Minimum 1 night
+    except:
+        nights = 1  # Default to 1 night if parsing fails
+    
     # For now, only Stockholm is supported with real data
     if city.lower() != 'stockholm':
         return jsonify({
@@ -260,10 +271,19 @@ def get_hotels():
             'total_found': 0
         }), 404
     
-    # Add search parameters to booking URLs
+    # Add search parameters to booking URLs and calculate total stay price
     enhanced_hotels = []
     for hotel in STOCKHOLM_HOTELS:
         enhanced_hotel = hotel.copy()
+        
+        # Calculate total price for the stay (per night price * number of nights)
+        per_night_price = hotel['price']
+        total_stay_price = per_night_price * nights
+        
+        # Update price to total stay price
+        enhanced_hotel['price'] = total_stay_price
+        enhanced_hotel['price_per_night'] = per_night_price
+        enhanced_hotel['nights'] = nights
         
         # Add search parameters to booking URL
         base_url = hotel['booking_url']
@@ -302,11 +322,13 @@ def get_hotels():
             'checkout': checkout,
             'adults': adults,
             'rooms': rooms,
-            'room_type': room_type
+            'room_type': room_type,
+            'nights': nights
         },
         'data_source': 'CURATED_REAL_STOCKHOLM_DATA',
         'api_verification': 'Working' if api_working else 'Failed',
         'booking_urls': 'Enhanced with search parameters',
+        'pricing': f'Total stay price for {nights} night(s)',
         'data_quality': 'HIGH - Real hotel names, addresses, prices, and coordinates'
     })
 
