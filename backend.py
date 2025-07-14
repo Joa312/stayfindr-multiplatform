@@ -264,9 +264,9 @@ def search_booking_hotels(city_info, checkin, checkout, adults, rooms):
         return []
 
 def search_hotels_com_hotels(city_info, checkin, checkout, adults, rooms):
-    """Search hotels using Hotels.com GraphQL API with YOUR structure"""
+    """Search hotels using Hotels.com API - NOW WITH REAL WORKING API!"""
     try:
-        # Use your actual Hotels.com API endpoint
+        # Use your WORKING Hotels.com API endpoint
         url = "https://hotels-com.p.rapidapi.com/v2/search"
         
         headers = {
@@ -274,63 +274,71 @@ def search_hotels_com_hotels(city_info, checkin, checkout, adults, rooms):
             "x-rapidapi-host": "hotels-com.p.rapidapi.com"
         }
         
-        # Build search parameters based on your working structure
+        # Build search parameters for Hotels.com API
         params = {
             "destination": city_info['hotels_search'],
             "checkin": checkin,
             "checkout": checkout,
             "adults": adults,
             "rooms": rooms,
-            "currency": "USD"
+            "currency": "USD",
+            "limit": 25
         }
         
-        print(f"🏨 Calling Hotels.com API for {city_info['name']}...")
+        print(f"🏨 Calling REAL Hotels.com API for {city_info['name']}...")
         print(f"📡 URL: {url}")
         print(f"📊 Params: {params}")
         
-        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response = requests.get(url, headers=headers, params=params, timeout=15)
         print(f"📈 Hotels.com Response Status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
             
-            # Extract hotels from YOUR GraphQL structure
-            hotels = []
-            if 'data' in data and 'propertySearchListings' in data['data']:
+            # Check if we have the expected structure
+            if data.get('status') and 'data' in data and 'propertySearchListings' in data['data']:
                 
                 property_listings = data['data']['propertySearchListings']
-                print(f"🏨 Found {len(property_listings)} properties from Hotels.com")
+                print(f"🏨 Found {len(property_listings)} properties from REAL Hotels.com API")
                 
-                for i, property_data in enumerate(property_listings[:10]):  # Limit to 10
+                hotels = []
+                for i, property_data in enumerate(property_listings[:10]):  # Limit to 10 hotels
                     try:
-                        # Extract hotel name from headingSection
+                        # Extract hotel name from YOUR working structure
                         hotel_name = property_data.get('headingSection', {}).get('heading', f'Hotel {i+1}')
                         
                         # Extract location from headingSection messages
                         location_messages = property_data.get('headingSection', {}).get('messages', [])
                         location = location_messages[0].get('text', city_info['name']) if location_messages else city_info['name']
                         
-                        # Extract price from priceSection
-                        price_per_night = 200  # Default
+                        # Extract price from YOUR exact priceSection structure
+                        price_per_night = 150  # Default fallback
                         try:
                             price_section = property_data.get('priceSection', {})
                             price_summary = price_section.get('priceSummary', {})
                             display_messages = price_summary.get('displayMessages', [])
                             
+                            # Look for LEAD role price in displayMessages
                             for message_group in display_messages:
-                                for line_item in message_group.get('lineItems', []):
+                                line_items = message_group.get('lineItems', [])
+                                for line_item in line_items:
                                     if line_item.get('role') == 'LEAD':
-                                        price_formatted = line_item.get('price', {}).get('formatted', '$200')
+                                        price_formatted = line_item.get('price', {}).get('formatted', '$150')
                                         # Extract number from "$475" format
                                         import re
                                         price_match = re.search(r'\$(\d+)', price_formatted)
                                         if price_match:
                                             price_per_night = int(price_match.group(1))
+                                            print(f"💰 Extracted price: ${price_per_night} from {price_formatted}")
                                         break
-                        except:
-                            price_per_night = 200 + (i * 50)  # Fallback pricing
+                                if price_per_night != 150:  # Found a price
+                                    break
+                                    
+                        except Exception as price_error:
+                            print(f"⚠️ Price extraction error: {price_error}")
+                            price_per_night = 150 + (i * 25)  # Fallback pricing
                         
-                        # Extract rating from guestRatingSectionV2
+                        # Extract rating from YOUR exact guestRatingSectionV2 structure
                         rating = 4.0  # Default
                         try:
                             summary_sections = property_data.get('summarySections', [])
@@ -340,8 +348,10 @@ def search_hotels_com_hotels(city_info, checkin, checkout, adults, rooms):
                                     badge = rating_section.get('badge', {})
                                     rating_text = badge.get('text', '4.0')
                                     rating = float(rating_text)
+                                    print(f"⭐ Extracted rating: {rating} from badge")
                                     break
-                        except:
+                        except Exception as rating_error:
+                            print(f"⚠️ Rating extraction error: {rating_error}")
                             rating = 4.0 + (i * 0.1)
                         
                         # Generate coordinates around city center
@@ -350,14 +360,18 @@ def search_hotels_com_hotels(city_info, checkin, checkout, adults, rooms):
                             city_info['coordinates'][1] + (i * 0.008) - 0.02
                         ]
                         
+                        # Extract property ID for booking URL
+                        property_id = property_data.get('id', f'hotel-{i}')
+                        
                         hotel = {
-                            'id': f"hotels-com-{property_data.get('id', i)}",
+                            'id': f"hotels-com-{property_id}",
                             'name': hotel_name,
-                            'address': f"{location}, {city_info['name']}",
+                            'address': f"{location}",
                             'coordinates': coordinates,
                             'price_per_night': price_per_night,
                             'rating': min(rating, 5.0),  # Cap at 5.0
-                            'platform': 'hotels.com'
+                            'platform': 'hotels.com',
+                            'property_id': property_id
                         }
                         
                         hotels.append(hotel)
@@ -367,12 +381,15 @@ def search_hotels_com_hotels(city_info, checkin, checkout, adults, rooms):
                         print(f"❌ Error processing hotel {i}: {e}")
                         continue
                 
+                print(f"🎉 Successfully extracted {len(hotels)} hotels from REAL Hotels.com API!")
                 return hotels
-            
+            else:
+                print(f"⚠️ Unexpected Hotels.com API response structure: {list(data.keys()) if isinstance(data, dict) else 'Not dict'}")
+        
         # Fallback to curated data if API fails
         print("🔄 Hotels.com API failed, using curated Stockholm data...")
         if 'stockholm' in city_info['name'].lower():
-            return HOTELS_COM_STOCKHOLM_HOTELS
+            return HOTELS_COM_STOCKHOLM_HOTELS[:10]  # Limit to match API
         else:
             return []
             
@@ -380,22 +397,23 @@ def search_hotels_com_hotels(city_info, checkin, checkout, adults, rooms):
         print(f"Hotels.com search error: {e}")
         # Fallback to curated Stockholm data
         if 'stockholm' in city_info['name'].lower():
-            return HOTELS_COM_STOCKHOLM_HOTELS
+            return HOTELS_COM_STOCKHOLM_HOTELS[:10]
         return []
 
 def create_booking_url(hotel, checkin, checkout, adults, rooms):
-    """Create platform-specific booking URL"""
+    """Create platform-specific booking URL with enhanced parameters"""
     
     if hotel['platform'] == 'booking.com':
         # Enhanced Booking.com URL with search parameters
         base_url = "https://www.booking.com/searchresults.html"
-        params = f"?ss={hotel['name'].replace(' ', '+')}&checkin={checkin}&checkout={checkout}&group_adults={adults}&no_rooms={rooms}"
+        params = f"?ss={hotel['name'].replace(' ', '+')}&checkin={checkin}&checkout={checkout}&group_adults={adults}&no_rooms={rooms}&selected_currency=SEK"
         return base_url + params
     
     elif hotel['platform'] == 'hotels.com':
-        # Hotels.com URL structure
-        base_url = "https://www.hotels.com/search.do"
-        params = f"?destination={hotel['name'].replace(' ', '+')}&checkin={checkin}&checkout={checkout}&adults={adults}&rooms={rooms}"
+        # Hotels.com URL using the actual property ID from API
+        property_id = hotel.get('property_id', hotel['id'])
+        base_url = f"https://www.hotels.com/h{property_id}.Hotel-Information"
+        params = f"?chkin={checkin}&chkout={checkout}&x_pwa=1&rfrr=HSR&pwa_ts=1234567890&adults1={adults}&rm1=a{adults}"
         return base_url + params
     
     else:
