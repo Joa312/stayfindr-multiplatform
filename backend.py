@@ -82,21 +82,54 @@ def search_real_hotels(dest_id, checkin, checkout, adults, rooms):
             print(f"✅ Response keys: {list(data.keys())}")
             
             if data.get('status') and data.get('data'):
-                # Success - extract hotels
+                # Success - extract hotels from GraphQL structure
                 hotel_data = data['data']
+                print(f"🔍 Hotel data type: {type(hotel_data)}")
+                print(f"🔍 Hotel data keys: {list(hotel_data.keys()) if isinstance(hotel_data, dict) else 'Not a dict'}")
                 
-                # Handle different structures
+                # Handle GraphQL SearchQueryOutput structure
                 hotels = []
-                if isinstance(hotel_data, list):
-                    hotels = hotel_data
-                elif isinstance(hotel_data, dict):
-                    for key in ['properties', 'hotels', 'results', 'items']:
-                        if key in hotel_data:
-                            hotels = hotel_data[key]
-                            break
                 
-                print(f"🏨 Found {len(hotels)} hotels")
-                return hotels[:25]
+                # Look for properties/results in the SearchQueryOutput
+                if isinstance(hotel_data, dict):
+                    # Common GraphQL hotel result fields
+                    possible_hotel_fields = [
+                        'properties', 'hotels', 'results', 'items', 'accommodations',
+                        'searchResults', 'propertySearchResults', 'stays'
+                    ]
+                    
+                    for field in possible_hotel_fields:
+                        if field in hotel_data and isinstance(hotel_data[field], list):
+                            hotels = hotel_data[field]
+                            print(f"🏨 Found {len(hotels)} hotels in '{field}' field")
+                            break
+                    
+                    # If no direct array, check nested structures
+                    if not hotels:
+                        print(f"🔍 Searching nested structures in GraphQL response...")
+                        # Print first level to understand structure
+                        for key, value in hotel_data.items():
+                            if isinstance(value, dict):
+                                print(f"🔍 Nested object '{key}' has keys: {list(value.keys())}")
+                                # Check nested objects for hotel arrays
+                                for nested_key, nested_value in value.items():
+                                    if isinstance(nested_value, list) and len(nested_value) > 0:
+                                        # Check if this looks like hotel data
+                                        if isinstance(nested_value[0], dict) and any(hotel_field in str(nested_value[0]) for hotel_field in ['name', 'title', 'property', 'hotel']):
+                                            hotels = nested_value
+                                            print(f"🏨 Found {len(hotels)} hotels in nested '{key}.{nested_key}' field")
+                                            break
+                                if hotels:
+                                    break
+                
+                if hotels:
+                    print(f"✅ Successfully extracted {len(hotels)} hotels")
+                    print(f"📋 Sample hotel keys: {list(hotels[0].keys()) if hotels else 'No hotels'}")
+                    return hotels[:25]
+                else:
+                    print(f"❌ No hotels found in expected structure")
+                    print(f"📋 Full response sample: {str(data)[:1000]}")
+                    return []
             else:
                 print(f"❌ API returned errors: {data.get('errors', 'Unknown error')}")
                 return []
