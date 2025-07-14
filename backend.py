@@ -142,33 +142,160 @@ def search_real_hotels(dest_id, checkin, checkout, adults, rooms):
         return []
 
 def process_hotels(hotels, city_info):
-    """Process hotel data"""
+    """Process hotel data from GraphQL structure"""
     processed = []
     
     for i, hotel in enumerate(hotels):
-        # Extract hotel info
-        name = hotel.get('name') or hotel.get('hotel_name') or f"Hotel_{i}"
-        price = hotel.get('price') or hotel.get('rate') or 'N/A'
-        rating = hotel.get('rating') or hotel.get('review_score', 4.0)
+        print(f"🏨 Processing hotel {i}: {list(hotel.keys()) if isinstance(hotel, dict) else type(hotel)}")
         
-        # Coordinates
-        lat = hotel.get('latitude') or hotel.get('lat')
-        lng = hotel.get('longitude') or hotel.get('lng')
+        # Extract hotel info from GraphQL structure
+        # Try multiple possible field names for hotel name
+        name_fields = ['name', 'title', 'displayName', 'hotelName', 'propertyName', 'basicPropertyData.displayName']
+        name = None
+        
+        for field in name_fields:
+            if '.' in field:  # Handle nested fields
+                parts = field.split('.')
+                value = hotel
+                for part in parts:
+                    if isinstance(value, dict) and part in value:
+                        value = value[part]
+                    else:
+                        value = None
+                        break
+                if value:
+                    name = value
+                    break
+            elif field in hotel:
+                name = hotel[field]
+                break
+        
+        if not name:
+            name = f"Stockholm Hotel {i+1}"  # Better fallback name
+        
+        # Extract price from GraphQL structure
+        price_fields = [
+            'price', 'rate', 'priceBreakdown.grossPrice.value', 
+            'pricing.total', 'accommodation.price', 'displayPrice.amount',
+            'minTotalPrice', 'basicPropertyData.price'
+        ]
+        price = "N/A"
+        
+        for field in price_fields:
+            if '.' in field:  # Handle nested fields
+                parts = field.split('.')
+                value = hotel
+                for part in parts:
+                    if isinstance(value, dict) and part in value:
+                        value = value[part]
+                    else:
+                        value = None
+                        break
+                if value and str(value).replace('.', '').replace('-', '').isdigit():
+                    price = int(float(value))
+                    break
+            elif field in hotel and str(hotel[field]).replace('.', '').replace('-', '').isdigit():
+                price = int(float(hotel[field]))
+                break
+        
+        # Extract rating
+        rating_fields = ['rating', 'reviewScore', 'score', 'starRating', 'basicPropertyData.reviewScore.score']
+        rating = 4.0
+        
+        for field in rating_fields:
+            if '.' in field:  # Handle nested fields
+                parts = field.split('.')
+                value = hotel
+                for part in parts:
+                    if isinstance(value, dict) and part in value:
+                        value = value[part]
+                    else:
+                        value = None
+                        break
+                if value:
+                    rating_val = float(value)
+                    rating = rating_val / 2 if rating_val > 5 else rating_val
+                    break
+            elif field in hotel and hotel[field]:
+                rating_val = float(hotel[field])
+                rating = rating_val / 2 if rating_val > 5 else rating_val
+                break
+        
+        # Extract coordinates
+        coord_fields = [
+            ('latitude', 'longitude'), ('lat', 'lng'), ('lat', 'lon'),
+            ('coordinates.latitude', 'coordinates.longitude'),
+            ('basicPropertyData.location.latitude', 'basicPropertyData.location.longitude')
+        ]
+        
+        lat, lng = None, None
+        for lat_field, lng_field in coord_fields:
+            # Handle nested coordinates
+            if '.' in lat_field:
+                lat_parts = lat_field.split('.')
+                lng_parts = lng_field.split('.')
+                
+                lat_val = hotel
+                for part in lat_parts:
+                    if isinstance(lat_val, dict) and part in lat_val:
+                        lat_val = lat_val[part]
+                    else:
+                        lat_val = None
+                        break
+                
+                lng_val = hotel
+                for part in lng_parts:
+                    if isinstance(lng_val, dict) and part in lng_val:
+                        lng_val = lng_val[part]
+                    else:
+                        lng_val = None
+                        break
+                
+                if lat_val and lng_val:
+                    lat, lng = float(lat_val), float(lng_val)
+                    break
+            elif lat_field in hotel and lng_field in hotel:
+                lat, lng = float(hotel[lat_field]), float(hotel[lng_field])
+                break
         
         if lat and lng:
-            coordinates = [float(lat), float(lng)]
+            coordinates = [lat, lng]
         else:
+            # Tight clustering around Stockholm center
             base_lat, base_lng = city_info['coordinates']
             coordinates = [base_lat + (i * 0.002), base_lng + (i * 0.002)]
         
+        # Extract hotel ID
+        id_fields = ['id', 'hotelId', 'propertyId', 'basicPropertyData.id']
+        hotel_id = None
+        
+        for field in id_fields:
+            if '.' in field:
+                parts = field.split('.')
+                value = hotel
+                for part in parts:
+                    if isinstance(value, dict) and part in value:
+                        value = value[part]
+                    else:
+                        value = None
+                        break
+                if value:
+                    hotel_id = str(value)
+                    break
+            elif field in hotel:
+                hotel_id = str(hotel[field])
+                break
+        
+        if not hotel_id:
+            hotel_id = f"stockholm_hotel_{i}"
+        
         # Create booking URL
-        hotel_id = hotel.get('id') or hotel.get('hotel_id') or f"hotel_{i}"
         booking_url = f"https://www.booking.com/hotel/{city_info['country_code']}/hotel-{hotel_id}.html"
         
         processed_hotel = {
             'id': hotel_id,
             'name': name,
-            'address': hotel.get('address', city_info['name']),
+            'address': hotel.get('address') or hotel.get('location') or city_info['name'],
             'coordinates': coordinates,
             'price': price,
             'rating': float(rating) if rating else 4.0,
@@ -178,6 +305,7 @@ def process_hotels(hotels, city_info):
             'source': 'REAL_API'
         }
         
+        print(f"✅ Processed: {name} - €{price} - Rating: {rating}")
         processed.append(processed_hotel)
     
     return processed
