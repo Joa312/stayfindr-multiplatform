@@ -330,16 +330,18 @@ def test():
         "test_ready": True
     })
 
-@app.route('/test-simple')
-def test_simple():
-    """Simple test of working endpoint"""
+@app.route('/debug-raw-data')
+def debug_raw_data():
+    """Debug: Show raw API response to understand structure"""
     
     url = "https://booking-com18.p.rapidapi.com/web/stays/search"
     params = {
-        "destId": "-2735409",  # Try negative Stockholm ID format
+        "destId": "-2735409",  # Stockholm
         "destType": "city",
         "checkIn": "2025-07-15",
-        "checkOut": "2025-07-16"
+        "checkOut": "2025-07-16",
+        "adults": "2",
+        "rooms": "1"
     }
     headers = {
         "x-rapidapi-host": "booking-com18.p.rapidapi.com",
@@ -347,24 +349,25 @@ def test_simple():
     }
     
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=20)
+        response = requests.get(url, headers=headers, params=params, timeout=30)
         
         if response.status_code == 200:
             data = response.json()
+            
+            # Return raw structure for analysis
             return jsonify({
-                "status": "SUCCESS!",
-                "status_code": response.status_code,
-                "has_data": bool(data.get('data')),
-                "has_errors": bool(data.get('errors')),
+                "status": "SUCCESS - RAW API DATA",
                 "response_keys": list(data.keys()),
-                "testing_dest_id": "-2735409 (negative format)",
-                "sample_response": str(data)[:1000]
+                "data_type": type(data.get('data')).__name__,
+                "data_keys": list(data.get('data', {}).keys()) if isinstance(data.get('data'), dict) else "Not a dict",
+                "raw_response_sample": str(data)[:3000],  # First 3000 chars
+                "full_response_size": len(str(data))
             })
         else:
             return jsonify({
                 "status": "FAILED",
                 "status_code": response.status_code,
-                "error": response.text[:300]
+                "error": response.text[:500]
             })
     except Exception as e:
         return jsonify({
